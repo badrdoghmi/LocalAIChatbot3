@@ -2,8 +2,14 @@
 class ChatBot {
   constructor() {
     this.engine = null;
-    // Modèle ultra-léger pour chargement rapide
-    this.selectedModel = "TinyLlama-1.1B-Chat-v0.4-q4f32_1-MLC";
+    // Modèles disponibles - utilisation d'un modèle plus stable
+    this.availableModels = [
+      "Llama-3.2-1B-Instruct-q4f32_1-MLC",
+      "Llama-3.2-3B-Instruct-q4f32_1-MLC", 
+      "TinyLlama-1.1B-Chat-v1.0-q4f32_1-MLC",
+      "Mistral-7B-Instruct-v0.3-q4f32_1-MLC"
+    ];
+    this.selectedModel = "Llama-3.2-1B-Instruct-q4f32_1-MLC"; // Modèle plus stable
     this.isInitialized = false;
     this.currentMode = 'cloud'; // Gemini par défaut
     this.isGenerating = false;
@@ -60,6 +66,7 @@ class ChatBot {
     this.previewImage = document.getElementById('previewImage');
     this.imageName = document.getElementById('imageName');
     this.removeImageBtn = document.getElementById('removeImageBtn');
+    this.modelSelect = document.getElementById('modelSelect');
 
     // Event listeners
     this.userInput.addEventListener('keypress', (e) => {
@@ -97,7 +104,7 @@ class ChatBot {
           console.error('Failed to load local model:', error);
           this.modeSelect.value = 'cloud';
           this.currentMode = 'cloud';
-          this.showError('Modèle local indisponible. Retour au mode Gemini.');
+          this.showError('Modèle local indisponible. Retour au mode Gemini. Erreur: ' + error.message);
         } finally {
           this.hideLoadingScreen();
           this.localModelLoading = false;
@@ -142,31 +149,36 @@ class ChatBot {
   async initializeWebLLM() {
     return new Promise(async (resolve, reject) => {
       try {
-        this.updateLoadingText('Chargement du modèle TinyLlama...');
+        this.updateLoadingText('Initialisation de WebLLM...');
         
         // Vérifier si WebLLM est disponible
         if (typeof webllm === 'undefined') {
-          throw new Error('WebLLM n\'est pas chargé correctement');
+          throw new Error('WebLLM library not loaded. Check CDN connection.');
         }
 
-        // Timeout après 45 secondes maximum
-        const loadTimeout = setTimeout(() => {
-          reject(new Error('Timeout du chargement du modèle'));
-        }, 45000);
+        console.log('WebLLM version:', webllm.version);
+        console.log('Loading model:', this.selectedModel);
 
-        // Initialize WebLLM engine avec modèle léger
+        // Timeout après 60 secondes maximum
+        const loadTimeout = setTimeout(() => {
+          reject(new Error('Timeout: Model loading took too long (60s)'));
+        }, 60000);
+
+        // Initialize WebLLM engine avec modèle plus récent
         this.engine = await webllm.CreateWebLLMEngine({
-          appId: "chatbot-fast",
+          appId: "chatbot-app-v2",
           model: this.selectedModel,
           initProgressCallback: (report) => {
+            console.log('WebLLM Progress:', report);
             this.handleInitProgress(report);
             
             // Résoudre quand le chargement est complet
-            if (report.text.includes("All initialization completed.")) {
+            if (report.text.includes("All initialization completed.") || 
+                report.text.includes("Ready to generate")) {
               clearTimeout(loadTimeout);
               this.isInitialized = true;
               this.updateStatusIndicator();
-              console.log('WebLLM engine initialized successfully');
+              console.log('WebLLM engine initialized successfully with model:', this.selectedModel);
               resolve();
             }
           }
@@ -174,7 +186,15 @@ class ChatBot {
 
       } catch (error) {
         console.error('WebLLM initialization error:', error);
-        reject(error);
+        
+        // Tentative avec un modèle de fallback
+        if (this.selectedModel !== "TinyLlama-1.1B-Chat-v1.0-q4f32_1-MLC") {
+          console.log('Trying fallback model...');
+          this.selectedModel = "TinyLlama-1.1B-Chat-v1.0-q4f32_1-MLC";
+          this.initializeWebLLM().then(resolve).catch(reject);
+        } else {
+          reject(error);
+        }
       }
     });
   }
@@ -194,13 +214,17 @@ class ChatBot {
     
     // Messages de progression plus user-friendly
     if (progressText.includes("Fetching")) {
-      this.updateLoadingText('Téléchargement du modèle...');
+      this.updateLoadingText('Téléchargement des fichiers du modèle...');
     } else if (progressText.includes("Loading")) {
       this.updateLoadingText('Chargement en mémoire...');
     } else if (progressText.includes("Initializing")) {
-      this.updateLoadingText('Initialisation...');
+      this.updateLoadingText('Initialisation du moteur...');
     } else if (progressText.includes("Weights")) {
-      this.updateLoadingText('Chargement des poids...');
+      this.updateLoadingText('Chargement des poids du modèle...');
+    } else if (progressText.includes("KV")) {
+      this.updateLoadingText('Préparation du cache...');
+    } else if (progressText.includes("Completed") || progressText.includes("Ready")) {
+      this.updateLoadingText('Modèle chargé avec succès !');
     }
   }
 
@@ -231,7 +255,7 @@ class ChatBot {
   updateStatusIndicator() {
     if (this.currentMode === 'local' && this.isInitialized) {
       this.statusDot.className = 'w-2 h-2 bg-green-500 rounded-full';
-      this.statusText.textContent = 'Local - TinyLlama';
+      this.statusText.textContent = `Local - ${this.getModelDisplayName()}`;
       this.statusText.className = 'text-xs text-green-400';
     } else if (this.currentMode === 'cloud') {
       this.statusDot.className = 'w-2 h-2 bg-blue-500 rounded-full';
@@ -242,6 +266,16 @@ class ChatBot {
       this.statusText.textContent = 'Local - Chargement';
       this.statusText.className = 'text-xs text-yellow-400';
     }
+  }
+
+  getModelDisplayName() {
+    const modelNames = {
+      "Llama-3.2-1B-Instruct-q4f32_1-MLC": "Llama 3.2 1B",
+      "Llama-3.2-3B-Instruct-q4f32_1-MLC": "Llama 3.2 3B",
+      "TinyLlama-1.1B-Chat-v1.0-q4f32_1-MLC": "TinyLlama 1.1B",
+      "Mistral-7B-Instruct-v0.3-q4f32_1-MLC": "Mistral 7B"
+    };
+    return modelNames[this.selectedModel] || this.selectedModel;
   }
 
   addWelcomeMessage() {
@@ -383,10 +417,19 @@ class ChatBot {
       return;
     }
 
+    // Vérifier le type de fichier
+    if (!file.type.startsWith('image/')) {
+      this.showError('Veuillez sélectionner un fichier image valide');
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (e) => {
       this.currentImage = e.target.result;
       this.showImagePreview(file.name, e.target.result);
+    };
+    reader.onerror = () => {
+      this.showError('Erreur lors de la lecture du fichier');
     };
     reader.readAsDataURL(file);
   }
@@ -466,6 +509,7 @@ class ChatBot {
         this.modeSelect.value = 'cloud';
         this.currentMode = 'cloud';
         this.updateStatusIndicator();
+        this.showError('Mode local désactivé. Retour à Gemini.');
       }
     } finally {
       this.isGenerating = false;
@@ -477,17 +521,21 @@ class ChatBot {
   async generateLocalResponse(userMessage) {
     try {
       const prompt = this.buildPrompt(userMessage);
+      console.log('Sending prompt to local model:', prompt);
+      
       const response = await this.engine.generate(prompt, {
-        maxGenLength: 512, // Longueur augmentée pour de meilleures réponses
+        maxGenLength: 1024, // Longueur augmentée pour de meilleures réponses
         temperature: 0.7,
-        topP: 0.9
+        topP: 0.9,
+        streamInterval: 1
       });
       
+      console.log('Raw local response:', response);
       return this.cleanResponse(response);
       
     } catch (error) {
       console.error('Local generation error:', error);
-      throw new Error('Erreur de génération locale');
+      throw new Error('Erreur de génération locale: ' + error.message);
     }
   }
 
@@ -524,22 +572,50 @@ class ChatBot {
   }
 
   buildPrompt(userMessage) {
-    // Prompt simplifié pour TinyLlama
-    return `<|system|>
-Vous êtes un assistant IA utile. Répondez de manière concise et utile en français.
+    // Prompt format pour les modèles Llama 3.2
+    if (this.selectedModel.includes('Llama-3.2')) {
+      return `<|start_header_id|>system<|end_header_id|>
+
+Vous êtes un assistant IA utile. Répondez de manière concise et utile en français.<|eot_id|>
+<|start_header_id|>user<|end_header_id|>
+
+${userMessage}<|eot_id|>
+<|start_header_id|>assistant<|end_header_id|>
+
+`;
+    }
+    
+    // Prompt format pour TinyLlama
+    if (this.selectedModel.includes('TinyLlama')) {
+      return `<|system|>
+Vous êtes un assistant IA utile. Répondez de manière concise et utile en français.</s>
 <|user|>
-${userMessage}
+${userMessage}</s>
 <|assistant|>
 `;
+    }
+    
+    // Prompt format par défaut
+    return `[INST] Vous êtes un assistant IA utile. Répondez de manière concise et utile en français.
+
+${userMessage} [/INST]`;
   }
 
   cleanResponse(response) {
-    // Nettoyage de la réponse pour enlever les artefacts du prompt
-    return response
-      .replace(/<\|system\|>.*?<\|assistant\|>/gs, '')
-      .replace(/<\|.*?\|>/g, '')
-      .replace(/\[.*?\]/g, '') // Enlève les tags supplémentaires
+    // Nettoyage basique de la réponse
+    let cleaned = response
+      .replace(/<\|.*?\|>/g, '') // Enlève les tags
+      .replace(/\[INST\].*?\[\/INST\]/gs, '') // Enlève les instructions
+      .replace(/<\/?s>/g, '') // Enlève les tags de fin
+      .replace(/�/g, '') // Enlève les caractères invalides
       .trim();
+
+    // Si la réponse est vide, retourner un message par défaut
+    if (!cleaned) {
+      return "Je n'ai pas pu générer une réponse cohérente. Pouvez-vous reformuler votre question ?";
+    }
+
+    return cleaned;
   }
 
   showError(message) {
@@ -554,7 +630,7 @@ ${userMessage}
       setTimeout(() => {
         errorElement.remove();
       }, 500);
-    }, 4000);
+    }, 5000);
   }
 }
 
