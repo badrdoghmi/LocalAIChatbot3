@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1f2937" />
+  <title>AI Chatbot • Gemini + WebLLM</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@mlc-ai/web-llm@0.2.50/dist/webllm.js"></script>
+  <style>
+    @media (max-width: 768px) {
+      #app {
+        height: 100vh !important;
+        border-radius: 0 !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-gray-900 text-gray-100">
+
+  <div id="app" class="w-full max-w-4xl h-[90vh] bg-gray-800 rounded-xl shadow-lg flex flex-col overflow-hidden mx-auto my-4">
+
+    <!-- Header -->
+    <header class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-850">
+      <div class="flex items-center space-x-3">
+        <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+          <span class="text-white font-bold text-sm">AI</span>
+        </div>
+        <h1 class="text-lg font-semibold text-blue-400">AI Chatbot</h1>
+      </div>
+      
+      <div class="flex items-center space-x-3">
+        <!-- Status Indicator -->
+        <div id="statusIndicator" class="flex items-center space-x-2">
+          <div id="statusDot" class="w-2 h-2 bg-green-500 rounded-full"></div>
+          <span id="statusText" class="text-xs text-green-400">Gemini - En ligne</span>
+        </div>
+        
+        <select id="modeSelect" class="bg-gray-700 text-gray-200 p-2 rounded-md border border-gray-600 text-sm">
+          <option value="cloud" selected>Cloud (Gemini)</option>
+          <option value="local">Local (TinyLlama)</option>
+        </select>
+      </div>
+    </header>
+
+    <!-- Chat Area -->
+    <main id="chat-content" class="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+      <div class="text-center text-gray-400 italic py-8">
+        <div class="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-3">
+          <span class="text-2xl">🤖</span>
+        </div>
+        Bienvenue ! Je suis prêt à discuter avec vous.
+        <p class="text-xs mt-2 text-gray-500">Mode Gemini activé - Réponses rapides et précises</p>
+      </div>
+    </main>
+
+    <!-- Typing Indicator -->
+    <div id="typing" class="text-gray-400 italic px-4 pb-2 hidden flex items-center space-x-2">
+      <div class="flex space-x-1">
+        <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+        <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+        <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+      </div>
+      <span>L'assistant écrit...</span>
+    </div>
+
+    <!-- Input Area -->
+    <footer class="p-4 border-t border-gray-700 bg-gray-850">
+      <div class="flex space-x-2 items-center">
+        <button id="micBtn" title="Parler" class="p-3 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors duration-200 flex-shrink-0">
+          <span class="text-sm">🎙️</span>
+        </button>
+        
+        <div class="flex-1 relative">
+          <input 
+            id="user-input" 
+            type="text" 
+            placeholder="Votre message..." 
+            class="w-full bg-gray-700 text-gray-100 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10" 
+          />
+          <button id="clearBtn" class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-200 hidden">
+            ✕
+          </button>
+        </div>
+        
+        <button id="sendBtn" class="p-3 bg-blue-500 rounded-lg hover:bg-blue-400 text-white font-bold transition-colors duration-200 flex-shrink-0">
+          <span class="text-sm">➤</span>
+        </button>
+      </div>
+      
+      <!-- Mobile Info -->
+      <div class="mt-2 text-xs text-gray-500 text-center md:hidden">
+        Appuyez sur Entrée pour envoyer
+      </div>
+    </footer>
+  </div>
+
+  <!-- Loading Screen (caché par défaut) -->
+  <div id="loadingScreen" class="fixed inset-0 bg-gray-900 flex items-center justify-center z-50 hidden">
+    <div class="text-center">
+      <div class="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+      <p class="text-gray-300" id="loadingText">Chargement du modèle local...</p>
+      <p class="text-gray-500 text-sm mt-2" id="progressText"></p>
+      <button id="cancelLoad" class="mt-4 px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600 text-gray-300 text-sm">
+        Annuler et utiliser Gemini
+      </button>
+    </div>
+  </div>
+
+  <script src="main.js" type="module"></script>
+</body>
+</html>
