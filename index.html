@@ -30,6 +30,9 @@
           <span class="text-white font-bold text-sm">AI</span>
         </div>
         <h1 class="text-lg font-semibold text-blue-400">AI Chatbot</h1>
+        <button id="newChatBtn" class="ml-4 px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors">
+          Nouveau Chat
+        </button>
       </div>
       
       <div class="flex items-center space-x-3">
@@ -74,6 +77,12 @@
           <span class="text-sm">🎙️</span>
         </button>
         
+        <!-- Bouton Upload d'image -->
+        <button id="imageUploadBtn" title="Uploader une image" class="p-3 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors duration-200 flex-shrink-0">
+          <span class="text-sm">🖼️</span>
+        </button>
+        <input type="file" id="imageInput" accept="image/*" class="hidden" />
+        
         <div class="flex-1 relative">
           <input 
             id="user-input" 
@@ -89,6 +98,15 @@
         <button id="sendBtn" class="p-3 bg-blue-500 rounded-lg hover:bg-blue-400 text-white font-bold transition-colors duration-200 flex-shrink-0">
           <span class="text-sm">➤</span>
         </button>
+      </div>
+      
+      <!-- Preview d'image -->
+      <div id="imagePreview" class="mt-2 hidden">
+        <div class="flex items-center space-x-2 bg-gray-700 p-2 rounded-lg">
+          <img id="previewImage" class="h-12 w-12 object-cover rounded" />
+          <span id="imageName" class="text-sm text-gray-300 flex-1"></span>
+          <button id="removeImageBtn" class="text-red-400 hover:text-red-300">✕</button>
+        </div>
       </div>
       
       <!-- Mobile Info -->
