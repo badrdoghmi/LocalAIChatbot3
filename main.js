@@ -8,6 +8,8 @@ class ChatBot {
     this.currentMode = 'cloud'; // Gemini par défaut
     this.isGenerating = false;
     this.localModelLoading = false;
+    this.chatHistory = [];
+    this.currentImage = null;
     
     this.initializeApp();
   }
@@ -20,8 +22,15 @@ class ChatBot {
       // Cache le loading screen car on utilise Gemini par défaut
       this.hideLoadingScreen();
       
-      // Add welcome message
-      this.addWelcomeMessage();
+      // Load chat history from localStorage
+      this.loadChatHistory();
+      
+      // Add welcome message if no history
+      if (this.chatHistory.length === 0) {
+        this.addWelcomeMessage();
+      } else {
+        this.displayChatHistory();
+      }
       
     } catch (error) {
       console.error('Initialization error:', error);
@@ -44,6 +53,13 @@ class ChatBot {
     this.loadingText = document.getElementById('loadingText');
     this.progressText = document.getElementById('progressText');
     this.cancelLoadBtn = document.getElementById('cancelLoad');
+    this.newChatBtn = document.getElementById('newChatBtn');
+    this.imageUploadBtn = document.getElementById('imageUploadBtn');
+    this.imageInput = document.getElementById('imageInput');
+    this.imagePreview = document.getElementById('imagePreview');
+    this.previewImage = document.getElementById('previewImage');
+    this.imageName = document.getElementById('imageName');
+    this.removeImageBtn = document.getElementById('removeImageBtn');
 
     // Event listeners
     this.userInput.addEventListener('keypress', (e) => {
@@ -96,6 +112,24 @@ class ChatBot {
       this.cancelLocalLoad();
     });
 
+    // Nouveau chat
+    this.newChatBtn.addEventListener('click', () => {
+      this.startNewChat();
+    });
+
+    // Upload d'image
+    this.imageUploadBtn.addEventListener('click', () => {
+      this.imageInput.click();
+    });
+
+    this.imageInput.addEventListener('change', (e) => {
+      this.handleImageUpload(e);
+    });
+
+    this.removeImageBtn.addEventListener('click', () => {
+      this.removeImage();
+    });
+
     // Initialize clear button state
     this.clearBtn.style.display = 'none';
     
@@ -110,10 +144,15 @@ class ChatBot {
       try {
         this.updateLoadingText('Chargement du modèle TinyLlama...');
         
-        // Timeout après 30 secondes maximum
+        // Vérifier si WebLLM est disponible
+        if (typeof webllm === 'undefined') {
+          throw new Error('WebLLM n\'est pas chargé correctement');
+        }
+
+        // Timeout après 45 secondes maximum
         const loadTimeout = setTimeout(() => {
           reject(new Error('Timeout du chargement du modèle'));
-        }, 30000);
+        }, 45000);
 
         // Initialize WebLLM engine avec modèle léger
         this.engine = await webllm.CreateWebLLMEngine({
@@ -134,6 +173,7 @@ class ChatBot {
         });
 
       } catch (error) {
+        console.error('WebLLM initialization error:', error);
         reject(error);
       }
     });
@@ -159,6 +199,8 @@ class ChatBot {
       this.updateLoadingText('Chargement en mémoire...');
     } else if (progressText.includes("Initializing")) {
       this.updateLoadingText('Initialisation...');
+    } else if (progressText.includes("Weights")) {
+      this.updateLoadingText('Chargement des poids...');
     }
   }
 
@@ -206,9 +248,10 @@ class ChatBot {
     const welcomeMessage = "Bonjour ! Je suis votre assistant IA. Je fonctionne actuellement en mode Gemini pour des réponses rapides et précises. Comment puis-je vous aider aujourd'hui ?";
     
     this.addMessage(welcomeMessage, false, false);
+    this.saveToHistory(welcomeMessage, false);
   }
 
-  createMessageElement(message, fromUser) {
+  createMessageElement(message, fromUser, isImage = false) {
     const messageElement = document.createElement('div');
     
     // Base classes
@@ -226,15 +269,25 @@ class ChatBot {
     
     messageElement.className = baseClasses.join(' ');
     
-    // Formatage du message avec sauts de ligne
-    const formattedMessage = message.replace(/\n/g, '<br>');
-    messageElement.innerHTML = formattedMessage;
+    if (isImage) {
+      // Message avec image
+      messageElement.innerHTML = `
+        <div class="mb-2">
+          <img src="${message.image}" alt="Image uploadée" class="max-w-full h-auto rounded-lg max-h-48 object-cover">
+        </div>
+        ${message.text ? `<div>${message.text}</div>` : ''}
+      `;
+    } else {
+      // Formatage du message avec sauts de ligne
+      const formattedMessage = message.replace(/\n/g, '<br>');
+      messageElement.innerHTML = formattedMessage;
+    }
     
     return messageElement;
   }
 
-  addMessage(message, fromUser, animate = true) {
-    const messageElement = this.createMessageElement(message, fromUser);
+  addMessage(message, fromUser, animate = true, isImage = false) {
+    const messageElement = this.createMessageElement(message, fromUser, isImage);
     
     if (!animate) {
       messageElement.classList.remove('message-animation');
@@ -259,10 +312,101 @@ class ChatBot {
     this.typingIndicator.classList.add('hidden');
   }
 
+  // Gestion de l'historique
+  saveToHistory(message, fromUser, imageData = null) {
+    this.chatHistory.push({
+      message: message,
+      fromUser: fromUser,
+      image: imageData,
+      timestamp: new Date().toISOString()
+    });
+    this.saveChatHistory();
+  }
+
+  saveChatHistory() {
+    try {
+      localStorage.setItem('chatHistory', JSON.stringify(this.chatHistory));
+    } catch (error) {
+      console.error('Error saving chat history:', error);
+    }
+  }
+
+  loadChatHistory() {
+    try {
+      const saved = localStorage.getItem('chatHistory');
+      if (saved) {
+        this.chatHistory = JSON.parse(saved);
+      }
+    } catch (error) {
+      console.error('Error loading chat history:', error);
+      this.chatHistory = [];
+    }
+  }
+
+  displayChatHistory() {
+    this.clearChatDisplay();
+    
+    this.chatHistory.forEach(chat => {
+      if (chat.image) {
+        this.addMessage({
+          text: chat.message,
+          image: chat.image
+        }, chat.fromUser, false, true);
+      } else {
+        this.addMessage(chat.message, chat.fromUser, false);
+      }
+    });
+  }
+
+  clearChatDisplay() {
+    this.chatContent.innerHTML = '';
+  }
+
+  startNewChat() {
+    if (confirm('Voulez-vous vraiment commencer une nouvelle conversation ? L\'historique actuel sera sauvegardé.')) {
+      this.chatHistory = [];
+      this.saveChatHistory();
+      this.clearChatDisplay();
+      this.addWelcomeMessage();
+      this.removeImage(); // Supprimer l'image uploadée
+    }
+  }
+
+  // Gestion des images
+  handleImageUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Vérifier la taille du fichier (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      this.showError('L\'image est trop volumineuse (max 5MB)');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      this.currentImage = e.target.result;
+      this.showImagePreview(file.name, e.target.result);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  showImagePreview(fileName, imageData) {
+    this.previewImage.src = imageData;
+    this.imageName.textContent = fileName;
+    this.imagePreview.classList.remove('hidden');
+  }
+
+  removeImage() {
+    this.currentImage = null;
+    this.imageInput.value = '';
+    this.imagePreview.classList.add('hidden');
+  }
+
   async handleSendMessage() {
     const userMessage = this.userInput.value.trim();
     
-    if (!userMessage || this.isGenerating) {
+    if ((!userMessage && !this.currentImage) || this.isGenerating) {
       return;
     }
 
@@ -270,8 +414,17 @@ class ChatBot {
     this.userInput.value = '';
     this.clearBtn.style.display = 'none';
     
-    // Add user message
-    this.addMessage(userMessage, true);
+    // Add user message with image if available
+    if (this.currentImage) {
+      this.addMessage({
+        text: userMessage,
+        image: this.currentImage
+      }, true, true, true);
+      this.saveToHistory(userMessage, true, this.currentImage);
+    } else {
+      this.addMessage(userMessage, true);
+      this.saveToHistory(userMessage, true);
+    }
     
     // Set generating state
     this.isGenerating = true;
@@ -291,6 +444,10 @@ class ChatBot {
       
       this.hideTypingIndicator();
       this.addMessage(botResponse, false);
+      this.saveToHistory(botResponse, false);
+      
+      // Supprimer l'image après envoi
+      this.removeImage();
       
     } catch (error) {
       console.error('Error generating response:', error);
@@ -302,6 +459,7 @@ class ChatBot {
         : "Désolé, une erreur de connexion s'est produite. Veuillez réessayer.";
       
       this.addMessage(errorMessage, false);
+      this.saveToHistory(errorMessage, false);
       
       // Fallback automatique au cloud en cas d'erreur locale
       if (this.currentMode === 'local') {
@@ -320,7 +478,7 @@ class ChatBot {
     try {
       const prompt = this.buildPrompt(userMessage);
       const response = await this.engine.generate(prompt, {
-        maxGenLength: 256, // Plus court pour plus de rapidité
+        maxGenLength: 512, // Longueur augmentée pour de meilleures réponses
         temperature: 0.7,
         topP: 0.9
       });
@@ -368,7 +526,7 @@ class ChatBot {
   buildPrompt(userMessage) {
     // Prompt simplifié pour TinyLlama
     return `<|system|>
-Vous êtes un assistant IA utile. Répondez de manière concise et utile.
+Vous êtes un assistant IA utile. Répondez de manière concise et utile en français.
 <|user|>
 ${userMessage}
 <|assistant|>
@@ -380,6 +538,7 @@ ${userMessage}
     return response
       .replace(/<\|system\|>.*?<\|assistant\|>/gs, '')
       .replace(/<\|.*?\|>/g, '')
+      .replace(/\[.*?\]/g, '') // Enlève les tags supplémentaires
       .trim();
   }
 
