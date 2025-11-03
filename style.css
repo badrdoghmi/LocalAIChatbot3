@@ -98,3 +98,13 @@ select:focus-visible {
     color: black !important;
   }
 }
+
+/* Image preview styles */
+#imagePreview {
+  transition: all 0.3s ease;
+}
+
+#previewImage {
+  max-height: 200px;
+  object-fit: contain;
+}
