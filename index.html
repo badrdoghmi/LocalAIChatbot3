@@ -9,7 +9,44 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/@mlc-ai/web-llm@0.2.50/dist/webllm.js"></script>
+  
+  <!-- WebLLM avec plusieurs CDNs de fallback -->
+  <script>
+    // Fonction pour charger WebLLM avec fallback
+    function loadWebLLM() {
+      const cdnUrls = [
+        "https://unpkg.com/@mlc-ai/web-llm@0.2.50/dist/webllm.js",
+        "https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.50/dist/webllm.js",
+        "https://esm.sh/@mlc-ai/web-llm@0.2.50"
+      ];
+
+      function tryLoad(index) {
+        if (index >= cdnUrls.length) {
+          console.error('All CDNs failed to load WebLLM');
+          window.webllmLoaded = false;
+          return;
+        }
+
+        const script = document.createElement('script');
+        script.src = cdnUrls[index];
+        script.onload = () => {
+          console.log('WebLLM loaded successfully from:', cdnUrls[index]);
+          window.webllmLoaded = true;
+        };
+        script.onerror = () => {
+          console.warn('Failed to load from:', cdnUrls[index]);
+          tryLoad(index + 1);
+        };
+        document.head.appendChild(script);
+      }
+
+      tryLoad(0);
+    }
+
+    // Charger WebLLM au démarrage
+    loadWebLLM();
+  </script>
+
   <style>
     @media (max-width: 768px) {
       #app {
@@ -25,12 +62,6 @@
 
     <!-- Header -->
     <header class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-850">
-      <!-- Dans la section header, après le modeSelect -->
-<select id="modelSelect" class="bg-gray-700 text-gray-200 p-2 rounded-md border border-gray-600 text-sm hidden">
-  <option value="Llama-3.2-1B-Instruct-q4f32_1-MLC">Llama 3.2 1B (Recommandé)</option>
-  <option value="TinyLlama-1.1B-Chat-v1.0-q4f32_1-MLC">TinyLlama 1.1B</option>
-  <option value="Llama-3.2-3B-Instruct-q4f32_1-MLC">Llama 3.2 3B</option>
-</select>
       <div class="flex items-center space-x-3">
         <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
           <span class="text-white font-bold text-sm">AI</span>
@@ -50,7 +81,13 @@
         
         <select id="modeSelect" class="bg-gray-700 text-gray-200 p-2 rounded-md border border-gray-600 text-sm">
           <option value="cloud" selected>Cloud (Gemini)</option>
-          <option value="local">Local (TinyLlama)</option>
+          <option value="local">Local (Llama 3.2 1B)</option>
+        </select>
+
+        <!-- Sélecteur de modèle caché par défaut -->
+        <select id="modelSelect" class="bg-gray-700 text-gray-200 p-2 rounded-md border border-gray-600 text-sm hidden">
+          <option value="Llama-3.2-1B-Instruct-q4f32_1-MLC">Llama 3.2 1B</option>
+          <option value="TinyLlama-1.1B-Chat-v1.0-q4f32_1-MLC">TinyLlama 1.1B</option>
         </select>
       </div>
     </header>
@@ -63,6 +100,7 @@
         </div>
         Bienvenue ! Je suis prêt à discuter avec vous.
         <p class="text-xs mt-2 text-gray-500">Mode Gemini activé - Réponses rapides et précises</p>
+        <p class="text-xs mt-1 text-yellow-500" id="webllmStatus">Chargement des modèles locaux...</p>
       </div>
     </main>
 
